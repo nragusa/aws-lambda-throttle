@@ -1,0 +1,125 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template to create an SNS topic to recieve S3 notifications, then use an SNS Delivery Policy to throttle requests to Lambda
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: Name of the S3 bucket used
+    Default: ragusan-s3-to-sns
+  MaxPerSecond:
+    Type: Number
+    Description: Maximum number of messages SNS will send to Lambda per second
+    Default: 1
+  ApiGatewayStage:
+    Type: String
+    Description: A single stage for the API resource used to keep template dynamic
+    Default: dev
+
+Resources:
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      DefinitionUri: ./swagger.yaml
+      StageName: !Ref ApiGatewayStage
+      Variables:
+        LambdaFunctionName: !Ref LambdaSNS
+  LambdaSNS:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Handler: sns.main
+      Description: Adds an item with a timestamp in DDB demonstrating the throttle behavior of SNS
+      Timeout: 15
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref MyTable
+      Policies:
+        - AWSLambdaExecute
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt MyTable.Arn
+      Events:
+        MyApi:
+          Type: Api
+          Properties:
+            Path: /
+            Method: post
+            RestApiId: !Ref ApiGatewayApi
+  LambdaSNSDelivery:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Handler: snsdelivery.main
+      Description: Custom resource to build and apply a SNS Topic Delivery Policy
+      Timeout: 15
+      Environment:
+        Variables:
+          SNS_ARN: !Ref MySNSTopic
+          MAX_PER_SECOND: !Ref MaxPerSecond
+      Policies:
+        - AWSLambdaExecute
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - sns:SetTopicAttributes
+              Resource: !Ref MySNSTopic
+  SNSDeliveryPolicy:
+    Type: Custom::SNSDeliveryPolicy
+    Properties:
+      ServiceToken: !GetAtt LambdaSNSDelivery.Arn
+  S3TestBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+      NotificationConfiguration:
+        TopicConfigurations:
+          - Event: s3:ObjectCreated:*
+            Topic: !Ref MySNSTopic
+  MyTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: myid
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  MySNSTopic:
+    Type: AWS::SNS::Topic
+    DependsOn: LambdaSNS
+    Properties:
+      DisplayName: S3SNSLambdaPOC
+      Subscription:
+        - Endpoint: !Join 
+          - ''
+          - - 'https://'
+            - !Ref ApiGatewayApi
+            - '.execute-api.'
+            - !Ref 'AWS::Region'
+            - '.amazonaws.com/'
+            - !Ref ApiGatewayStage
+          Protocol: https
+  MySNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: MyTopicPolicy
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Allow-S3-to-notify
+          Effect: Allow
+          Principal:
+            Service: 's3.amazonaws.com'
+          Action: sns:Publish
+          Resource: '*'
+          Condition:
+            ArnLike:
+              aws:SourceArn: !Join ['', ['arn:aws:s3:*:*:', !Ref S3BucketName]]
+      Topics:
+        - !Ref MySNSTopic

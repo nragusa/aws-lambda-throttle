@@ -1,0 +1,18 @@
+---
+swagger: "2.0"
+info:
+  version: "1.0"
+  title: "s3-sns-lambda"
+basePath: "/dev"
+schemes:
+- "https"
+paths:
+  /:
+    post:
+      responses: {}
+      x-amazon-apigateway-integration:
+        # UPDATE THESE VALUES TO YOUR ENVIRONMENT
+        uri: "arn:aws:apigateway:<<region>>:lambda:path/2015-03-31/functions/arn:aws:lambda:<<region>>:<<account>>:function:${stageVariables.LambdaFunctionName}/invocations"
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
