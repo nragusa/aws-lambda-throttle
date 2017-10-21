@@ -51,6 +51,6 @@ $ aws cloudformation deploy \
 
 ### CloudFormation Custom Resource
 
-Because you can not natively define an SNS Delivery Policy in CloudFormation (at least, not that I was able to fine), I created a custom resource using Lambda. All this Lambda function does is apply the Delivery Policy to the SNS Topic. 
+Because you can not natively define an SNS Delivery Policy in CloudFormation (at least, not that I was able to find), I created a custom resource using Lambda. All this Lambda function does is apply the Delivery Policy to the SNS Topic. 
 
 Note the ```MaxPerSecond``` parameter in the CloudFormation template. Use this value to adjust how many messages per second the SNS topic delivers to the Lambda function.
