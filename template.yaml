@@ -7,7 +7,7 @@ Parameters:
   S3BucketName:
     Type: String
     Description: Name of the S3 bucket used
-    Default: ragusan-s3-to-sns
+    Default: my-crazy-s3-bucket-name
   MaxPerSecond:
     Type: Number
     Description: Maximum number of messages SNS will send to Lambda per second
